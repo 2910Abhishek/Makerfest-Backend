@@ -25,8 +25,10 @@ GENERATION_LIMIT = 3
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "https://ai-image-generator-ronitkotharis-projects.vercel.app/",
+        "https://ai-image-generator-ronitkotharis-projects.vercel.app",
+        "https://makerfest-backend.onrender.com",
         "http://localhost:5173",
+        "*"  # Temporarily allow all origins for testing
     ],
     allow_credentials=True,
     allow_methods=["*"],
