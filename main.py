@@ -1,5 +1,6 @@
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from pydantic import BaseModel
 from datetime import datetime
 import io
@@ -11,6 +12,7 @@ import json
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload
+from starlette.responses import JSONResponse
 
 app = FastAPI()
 
@@ -26,14 +28,13 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "https://ai-image-generator-ronitkotharis-projects.vercel.app",
-        "https://makerfest-backend.onrender.com",
-        "http://localhost:5173",
-        "*"  # Temporarily allow all origins for testing
+        "http://localhost:5173"
     ],
-    allow_credentials=True,
-    allow_methods=["*"],
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
     expose_headers=["*"],
+    max_age=3600,
 )
 
 # Google Drive API setup
@@ -402,6 +403,34 @@ async def check_limit(stall_no: str):
 @app.get("/health")
 async def health_check():
     return {"status": "healthy", "drive_service": bool(drive_service)}
+
+@app.middleware("http")
+async def add_cors_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["Access-Control-Allow-Origin"] = "https://ai-image-generator-ronitkotharis-projects.vercel.app"
+    response.headers["Access-Control-Allow-Credentials"] = "false"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+    response.headers["Access-Control-Allow-Headers"] = "*"
+    return response
+
+@app.options("/{full_path:path}")
+async def options_handler(request: Request, full_path: str):
+    return JSONResponse(
+        status_code=200,
+        content={"detail": "OK"},
+        headers={
+            "Access-Control-Allow-Origin": "https://ai-image-generator-ronitkotharis-projects.vercel.app",
+            "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+            "Access-Control-Allow-Headers": "*",
+            "Access-Control-Allow-Credentials": "false",
+        },
+    )
+
+# Add after CORS middleware
+app.add_middleware(
+    TrustedHostMiddleware,
+    allowed_hosts=["*"]
+)
 
 if __name__ == "__main__":
     import uvicorn
