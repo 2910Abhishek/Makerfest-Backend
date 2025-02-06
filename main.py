@@ -16,26 +16,27 @@ from starlette.responses import JSONResponse
 
 app = FastAPI()
 
+# First, add TrustedHostMiddleware
+app.add_middleware(
+    TrustedHostMiddleware,
+    allowed_hosts=["*"]
+)
+
+# Then add CORS middleware with simplified configuration
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["https://ai-image-generator-ronitkotharis-projects.vercel.app"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # Configure OpenAI with environment variable
 openai.api_key = os.environ.get("OPENAI_API_KEY")
 
 # Rate limiting storage
 stall_usage = defaultdict(int)
 GENERATION_LIMIT = 3
-
-# Update CORS configuration
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
-        "https://ai-image-generator-ronitkotharis-projects.vercel.app",
-        "http://localhost:5173"
-    ],
-    allow_credentials=False,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["*"],
-    expose_headers=["*"],
-    max_age=3600,
-)
 
 # Google Drive API setup
 SCOPES = ['https://www.googleapis.com/auth/drive.file']
@@ -403,34 +404,6 @@ async def check_limit(stall_no: str):
 @app.get("/health")
 async def health_check():
     return {"status": "healthy", "drive_service": bool(drive_service)}
-
-@app.middleware("http")
-async def add_cors_headers(request: Request, call_next):
-    response = await call_next(request)
-    response.headers["Access-Control-Allow-Origin"] = "https://ai-image-generator-ronitkotharis-projects.vercel.app"
-    response.headers["Access-Control-Allow-Credentials"] = "false"
-    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
-    response.headers["Access-Control-Allow-Headers"] = "*"
-    return response
-
-@app.options("/{full_path:path}")
-async def options_handler(request: Request, full_path: str):
-    return JSONResponse(
-        status_code=200,
-        content={"detail": "OK"},
-        headers={
-            "Access-Control-Allow-Origin": "https://ai-image-generator-ronitkotharis-projects.vercel.app",
-            "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-            "Access-Control-Allow-Headers": "*",
-            "Access-Control-Allow-Credentials": "false",
-        },
-    )
-
-# Add after CORS middleware
-app.add_middleware(
-    TrustedHostMiddleware,
-    allowed_hosts=["*"]
-)
 
 if __name__ == "__main__":
     import uvicorn
