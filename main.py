@@ -20,17 +20,17 @@ openai.api_key = os.environ.get("OPENAI_API_KEY")
 stall_usage = defaultdict(int)
 GENERATION_LIMIT = 3
 
-# Configure CORS - update to use environment variable
+# Update CORS configuration
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:5173",
-        "https://ai-image-generator-five-topaz.vercel.app/",
-        os.environ.get("FRONTEND_URL", ""),
+        "https://ai-image-generator-five-topaz.vercel.app",  # Your Vercel frontend URL
+        "http://localhost:5173",  # Local development URL
     ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 # Google Drive API setup
