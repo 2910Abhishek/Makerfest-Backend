@@ -1,18 +1,29 @@
-FROM python:3.9
+FROM python:3.9-slim
 
+# Set working directory and environment variables
 WORKDIR /app
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
 
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements first to leverage Docker cache
 COPY requirements.txt .
-RUN pip install -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
+# Copy application code
 COPY . .
 
-# Add these lines to fix permissions
-RUN chmod -R 755 /app
-USER root
+# Create a non-root user and switch to it
+RUN useradd -m -r appuser && \
+    chown -R appuser:appuser /app
+USER appuser
 
 # Expose the port
 EXPOSE 10000
 
-# Update the CMD to specify host and port
-CMD ["gunicorn", "main:app", "--workers", "4", "--worker-class", "uvicorn.workers.UvicornWorker", "--bind", "0.0.0.0:10000"] 
+# Start the application
+CMD ["gunicorn", "--config", "gunicorn.conf.py", "main:app"] 
