@@ -15,5 +15,9 @@ RUN chmod -R 755 /app
 # Expose port
 EXPOSE 10000
 
-# Start command with proper CORS headers
+# Add healthcheck
+HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:10000/health || exit 1
+
+# Start command
 CMD ["gunicorn", "main:app", "--workers", "2", "--worker-class", "uvicorn.workers.UvicornWorker", "--bind", "0.0.0.0:10000", "--timeout", "120", "--forwarded-allow-ips", "*"] 

@@ -2,14 +2,15 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from datetime import datetime
-from google.oauth2 import service_account
-from googleapiclient.discovery import build
-from googleapiclient.http import MediaIoBaseUpload
 import io
 import pandas as pd
 import os
 import openai
 from collections import defaultdict
+import json
+from google.oauth2 import service_account
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaIoBaseUpload
 
 app = FastAPI()
 
@@ -24,8 +25,8 @@ GENERATION_LIMIT = 3
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "https://ai-image-generator-five-topaz.vercel.app",  # Your Vercel frontend URL
-        "http://localhost:5173",  # Local development URL
+        "https://ai-image-generator-five-topaz.vercel.app",
+        "http://localhost:5173",
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -35,25 +36,51 @@ app.add_middleware(
 
 # Google Drive API setup
 SCOPES = ['https://www.googleapis.com/auth/drive.file']
-SERVICE_ACCOUNT_FILE = os.environ.get("GOOGLE_CREDENTIALS")  # Will be set as an environment variable in Render
+drive_service = None
+
+def initialize_drive_service():
+    global drive_service
+    try:
+        # Get credentials from environment variable
+        creds_json = os.environ.get("GOOGLE_CREDENTIALS")
+        if not creds_json:
+            print("No Google credentials found in environment variables")
+            return None
+            
+        # Parse credentials JSON
+        try:
+            creds_dict = json.loads(creds_json)
+        except json.JSONDecodeError:
+            print("Invalid JSON in GOOGLE_CREDENTIALS")
+            return None
+            
+        # Create credentials object
+        credentials = service_account.Credentials.from_service_account_info(
+            creds_dict,
+            scopes=SCOPES
+        )
+        
+        # Build drive service
+        service = build('drive', 'v3', credentials=credentials)
+        print("Drive service initialized successfully")
+        return service
+    except Exception as e:
+        print(f"Error initializing drive service: {e}")
+        return None
+
+@app.on_event("startup")
+async def startup_event():
+    global drive_service
+    drive_service = initialize_drive_service()
 
 # Get Drive share emails from environment
 DRIVE_SHARE_EMAILS = os.environ.get("DRIVE_SHARE_EMAILS", "").split(",")
-
-try:
-    credentials = service_account.Credentials.from_service_account_file(
-        SERVICE_ACCOUNT_FILE, scopes=SCOPES
-    )
-    drive_service = build('drive', 'v3', credentials=credentials)
-except Exception as e:
-    print(f"Error setting up Google Drive credentials: {e}")
 
 class RegistrationData(BaseModel):
     projectName: str
     stallNo: str
 
     class Config:
-        # Add validation
         json_schema_extra = {
             "example": {
                 "projectName": "My Project",
@@ -89,6 +116,8 @@ def share_file(file_id, email):
 
 @app.post("/api/register")
 async def register_user(data: RegistrationData):
+    global drive_service
+    
     print(f"Received registration data: {data}")
     
     # Validate input
@@ -103,6 +132,15 @@ async def register_user(data: RegistrationData):
             status_code=422,
             detail="Stall number cannot be empty"
         )
+
+    # Check if drive service is initialized
+    if not drive_service:
+        drive_service = initialize_drive_service()
+        if not drive_service:
+            raise HTTPException(
+                status_code=500,
+                detail="Could not initialize Google Drive service"
+            )
 
     try:
         # Check if file exists in Google Drive to verify uniqueness
@@ -302,6 +340,10 @@ async def check_limit(stall_no: str):
         "total_generations": GENERATION_LIMIT,
         "used_generations": stall_usage[stall_no]
     }
+
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy", "drive_service": bool(drive_service)}
 
 if __name__ == "__main__":
     import uvicorn
