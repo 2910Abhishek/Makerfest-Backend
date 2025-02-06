@@ -14,7 +14,12 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload
 from starlette.responses import JSONResponse
 
-app = FastAPI()
+app = FastAPI(
+    root_path="",
+    servers=[
+        {"url": "https://makerfest-backend.onrender.com", "description": "Production server"},
+    ]
+)
 
 # First, add TrustedHostMiddleware
 app.add_middleware(
@@ -29,6 +34,7 @@ app.add_middleware(
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"]
 )
 
 # Configure OpenAI with environment variable
