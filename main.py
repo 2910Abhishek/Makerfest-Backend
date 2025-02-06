@@ -25,7 +25,7 @@ GENERATION_LIMIT = 3
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "https://ai-image-generator-oax8yhduu-ronitkotharis-projects.vercel.app/",
+        "https://ai-image-generator-ronitkotharis-projects.vercel.app/",
         "http://localhost:5173",
     ],
     allow_credentials=True,
