@@ -246,6 +246,7 @@ async def register_user(data: RegistrationData):
 
 @app.post("/generate-image")
 async def generate_image(data: ImagePrompt):
+    global drive_service
     print(f"Received request with data: {data}")
     
     # Validate input
@@ -269,6 +270,7 @@ async def generate_image(data: ImagePrompt):
         )
     
     try:
+        # Generate image using OpenAI
         response = openai.images.generate(
             model="dall-e-3",
             prompt=data.prompt.strip(),
@@ -282,6 +284,15 @@ async def generate_image(data: ImagePrompt):
         # Increment the usage counter for this stall
         stall_usage[data.stallNo] += 1
 
+        # Initialize drive service if needed
+        if not drive_service:
+            drive_service = initialize_drive_service()
+            if not drive_service:
+                raise HTTPException(
+                    status_code=500,
+                    detail="Could not initialize Google Drive service"
+                )
+
         # Update the registration in Google Drive with prompt and image URL
         file_name = 'Makerfest.csv'
         response = drive_service.files().list(
@@ -292,12 +303,48 @@ async def generate_image(data: ImagePrompt):
 
         if response['files']:
             file_id = response['files'][0]['id']
-            request = drive_service.files().get_media(fileId=file_id)
-            existing_content = request.execute()
-            df = pd.read_csv(io.StringIO(existing_content.decode('utf-8')))
             
-            # Add new row for this generation
-            new_row = pd.DataFrame([{
+            try:
+                # Get existing content
+                request = drive_service.files().get_media(fileId=file_id)
+                existing_content = request.execute()
+                df = pd.read_csv(io.StringIO(existing_content.decode('utf-8')))
+                
+                # Add new row for this generation
+                new_row = pd.DataFrame([{
+                    'Timestamp': datetime.now().isoformat(),
+                    'Stall_No': data.stallNo,
+                    'Prompt': data.prompt,
+                    'Generated_Image_URL': image_url,
+                    'Generation_Number': stall_usage[data.stallNo]
+                }])
+                
+                # Append the new row
+                updated_df = pd.concat([df, new_row], ignore_index=True)
+                
+                # Save updated CSV
+                csv_buffer = io.StringIO()
+                updated_df.to_csv(csv_buffer, index=False)
+                media = MediaIoBaseUpload(
+                    io.BytesIO(csv_buffer.getvalue().encode()),
+                    mimetype='text/csv',
+                    resumable=True
+                )
+                
+                # Update file
+                drive_service.files().update(
+                    fileId=file_id,
+                    media_body=media
+                ).execute()
+                
+                print(f"Successfully updated CSV with new image generation for stall {data.stallNo}")
+                
+            except Exception as e:
+                print(f"Error updating CSV: {str(e)}")
+                # Continue with the response even if CSV update fails
+        else:
+            # Create new CSV file if it doesn't exist
+            new_df = pd.DataFrame([{
                 'Timestamp': datetime.now().isoformat(),
                 'Stall_No': data.stallNo,
                 'Prompt': data.prompt,
@@ -305,22 +352,31 @@ async def generate_image(data: ImagePrompt):
                 'Generation_Number': stall_usage[data.stallNo]
             }])
             
-            # Append the new row
-            updated_df = pd.concat([df, new_row], ignore_index=True)
-            
-            # Save updated CSV
             csv_buffer = io.StringIO()
-            updated_df.to_csv(csv_buffer, index=False)
+            new_df.to_csv(csv_buffer, index=False)
+            
+            file_metadata = {
+                'name': file_name,
+                'mimeType': 'text/csv',
+            }
+            
             media = MediaIoBaseUpload(
                 io.BytesIO(csv_buffer.getvalue().encode()),
                 mimetype='text/csv',
                 resumable=True
             )
             
-            drive_service.files().update(
-                fileId=file_id,
-                media_body=media
+            file = drive_service.files().create(
+                body=file_metadata,
+                media_body=media,
+                fields='id'
             ).execute()
+            
+            # Share the file with specified emails
+            if DRIVE_SHARE_EMAILS:
+                for email in DRIVE_SHARE_EMAILS:
+                    if email.strip():
+                        share_file(file.get('id'), email.strip())
 
         return {
             "success": True, 
