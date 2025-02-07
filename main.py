@@ -154,7 +154,7 @@ async def register_user(data: RegistrationData):
 
     try:
         # Check if file exists in Google Drive to verify uniqueness
-        file_name = 'Makerfest.csv'
+        file_name = 'MakerFestVadodara.csv'
         response = drive_service.files().list(
             q=f"name='{file_name}'",
             spaces='drive',
