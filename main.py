@@ -154,7 +154,7 @@ async def register_user(data: RegistrationData):
 
     try:
         # Update file name here
-        file_name = 'MakerFestVadodara.csv'
+        file_name = 'Makerfest.csv'
         response = drive_service.files().list(
             q=f"name='{file_name}'",
             spaces='drive',
@@ -304,7 +304,7 @@ async def generate_image(data: ImagePrompt):
                 )
 
         # Update the registration in Google Drive with prompt and image URL
-        file_name = 'MakerFestVadodara.csv'
+        file_name = 'Makerfest.csv'
         response = drive_service.files().list(
             q=f"name='{file_name}'",
             spaces='drive',
